@@ -10,7 +10,7 @@ You must have these things installed:
 - [Go compiler](https://golang.org)
 - [Serverless Framework](https://serverless.com/framework)
 
-You will also need shell access to `wics@aviary.cs.umanitoba.ca`.
+You will also need shell access to the remote server (`wics@aviary.cs.umanitoba.ca`in this case), and it must have `rsync` installed.
 
 Deploy the service like so (these steps assume Linux or MacOS):
 

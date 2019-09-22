@@ -4,7 +4,12 @@ provider:
   runtime: go1.x
   layers:
     - !Ref ToolsLambdaLayer
+  iamRoleStatements:
+    - Effect: Allow
+      Action: lambda:InvokeFunction
+      Resource: !Join [':', ['arn', 'aws', 'lambda', '${self:provider.region}', !Ref 'AWS::AccountId', 'function', '${self:service}-${self:provider.stage}-*']]
   environment:
+    DEPLOY_FUNCTION: ${self:service}-${self:provider.stage}-deploy
     LANG: en_US.UTF-8  # Building the site fails without this.
     WEBHOOK_SECRET: ${env:WEBHOOK_SECRET}
 package:
@@ -24,7 +29,11 @@ layers:
         - ./bin/**
         - ./lib/**
 functions:
-  deploy:
-    handler: ./bin/deploy
+  webhook:
+    handler: ./bin/webhook
     events:
       - http: POST /deploy
+  deploy:
+    handler: ./bin/deploy
+    timeout: 900
+    memorySize: 3008

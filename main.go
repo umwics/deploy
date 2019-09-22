@@ -10,7 +10,10 @@ import (
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
+	runtime "github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/google/go-github/v28/github"
 	"github.com/mholt/archiver"
 )
@@ -27,6 +30,10 @@ const (
 )
 
 var (
+	// DeployFunction is the name of the deploy Lambda function.
+	DeployFunction = os.Getenv("DEPLOY_FUNCTION")
+	// Lambda is an AWS Lambda client.
+	Lambda = lambda.New(session.Must(session.NewSession()))
 	// RepoURL is the download URL of the repo.
 	RepoURL = fmt.Sprintf("https://github.com/%s/%s/archive/master.zip", RepoOwner, RepoName)
 	// WebhookSecret is the secret for GitHub.
@@ -131,7 +138,7 @@ func syncSite(dir string) error {
 	// We need to use a custom SSH command to use our bundled SSH key.
 	sshCmd := fmt.Sprintf("ssh -i %s", SSHKey)
 
-	return doCmd("rsync", "-e", sshCmd, "-a", "--delete", dir, RemotePath)
+	return doCmd("", "rsync", "-e", sshCmd, "-a", "--delete", dir, RemotePath)
 }
 
 // doCmd runs some shell command and prints its output.
@@ -148,32 +155,53 @@ func doCmd(dir, program string, args ...string) error {
 }
 
 func main() {
-	lambda.Start(func(req Request) (resp Response, nillErr error) {
-		if err := req.Validate(); err != nil {
-			fmt.Println("validate request:", err)
+	runtime.Start(func(req Request) (resp Response, err error) {
+		if strings.HasSuffix(os.Args[0], "webhook") {
+			resp.StatusCode = 200
+
+			// Make sure that the event is a push to the master branch.
+			if err = req.Validate(); err != nil {
+				fmt.Println("validate request:", err)
+				resp.StatusCode = 400
+			}
+
+			// Invoke the deploy function so that it can have more time to run and the chance to retry.
+			input := lambda.InvokeInput{
+				FunctionName:   aws.String(DeployFunction),
+				InvocationType: aws.String("Event"),
+			}
+			if _, err = Lambda.Invoke(&input); err != nil {
+				fmt.Println("invoke function:", err)
+				resp.StatusCode = 500
+			}
+
+			return resp, nil
+		} else if strings.HasSuffix(os.Args[0], "deploy") {
+			var dir string
+
+			// Download the site repository.
+			if dir, err = downloadRepo(); err != nil {
+				fmt.Println("download repo:", err)
+				return
+			}
+
+			// Build the site.
+			if dir, err = buildSite(dir); err != nil {
+				fmt.Println("build site:", err)
+				return
+			}
+
+			// Sync the site with the remote server.
+			if err = syncSite(dir); err != nil {
+				fmt.Println("sync site:", err)
+				return
+			}
+
+			return resp, nil
+		} else {
+			fmt.Println("unknown command:", os.Args[0])
 			resp.StatusCode = 400
-			return
+			return resp, nil
 		}
-		resp.StatusCode = 500
-
-		dir, err := downloadRepo()
-		if err != nil {
-			resp.Body = fmt.Errorf("download repo: %w", err).Error()
-			return
-		}
-
-		dir, err = buildSite(dir)
-		if err != nil {
-			resp.Body = fmt.Errorf("build site: %w", err).Error()
-			return
-		}
-
-		if err = syncSite(dir); err != nil {
-			resp.Body = fmt.Errorf("sync site: %w", err).Error()
-			return
-		}
-
-		resp.StatusCode = 200
-		return
 	})
 }
