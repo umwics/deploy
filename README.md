@@ -29,3 +29,6 @@ Deploy the service like so (these steps assume Linux or MacOS):
   Set the payload URL to the URL you saw in the last step.
   Set the secret to your `WEBHOOK_SECRET`.
   Press "Add webhook", and you're done!
+
+You can test the synchronization step by running `serverless invoke --function deploy --log`.
+If everything is set up properly, you should see the message "Successfully synchronized site".

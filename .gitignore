@@ -1,6 +1,8 @@
 !/layer/build.sh
+!/ssh/config
 *.env
-.serverless/
+/.serverless/
+/bin/
 /layer/*
-bin/
-ssh/
+/ssh.zip
+/ssh/wics*

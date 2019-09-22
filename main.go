@@ -25,8 +25,8 @@ const (
 	RepoName = "wics-site"
 	// RemotePath is the path to the site on the remote server.
 	RemotePath = "wics@aviary.cs.umanitoba.ca:~/public_html"
-	// SSHKey is the path to our SSH key.
-	SSHKey = "ssh/wics"
+	// SSHZip is the path to our .zip file with SSH files.
+	SSHZip = "ssh.zip"
 )
 
 var (
@@ -36,6 +36,8 @@ var (
 	Lambda = lambda.New(session.Must(session.NewSession()))
 	// RepoURL is the download URL of the repo.
 	RepoURL = fmt.Sprintf("https://github.com/%s/%s/archive/master.zip", RepoOwner, RepoName)
+	// SSHConfig is the path to our SSH config file.
+	SSHConfig = filepath.Join(os.TempDir(), "ssh", "config")
 	// WebhookSecret is the secret for GitHub.
 	WebhookSecret = []byte(os.Getenv("WEBHOOK_SECRET"))
 )
@@ -135,10 +137,16 @@ func syncSite(dir string) error {
 		dir += "/"
 	}
 
-	// We need to use a custom SSH command to use our bundled SSH key.
-	sshCmd := fmt.Sprintf("ssh -i %s", SSHKey)
+	// Unzip our SSH resources.
+	if err := archiver.Unarchive(SSHZip, os.TempDir()); err != nil {
+		return err
+	}
+	defer os.RemoveAll(filepath.Join(os.TempDir(), "ssh"))
 
-	return doCmd("", "rsync", "-e", sshCmd, "-a", "--delete", dir, RemotePath)
+	// Set a custom SSH command that uses our config file.
+	ssh := fmt.Sprintf("ssh -F %s", SSHConfig)
+
+	return doCmd("", "rsync", "-e", ssh, "-a", "--delete", dir, RemotePath)
 }
 
 // doCmd runs some shell command and prints its output.
@@ -197,6 +205,7 @@ func main() {
 				return
 			}
 
+			fmt.Println("Successfully synchronized site")
 			return resp, nil
 		} else {
 			fmt.Println("unknown command:", os.Args[0])

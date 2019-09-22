@@ -1,0 +1,4 @@
+Host *
+  IdentityFile /tmp/ssh/wics
+  StrictHostKeyChecking no
+  UserKnownHostsFile /tmp/known_hosts
