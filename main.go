@@ -86,6 +86,7 @@ func (req Request) Validate() error {
 
 // downloadRepo downloads and unzip the repository, and returns its directory.
 func downloadRepo() (string, error) {
+	// Request the zip file.
 	resp, err := http.Get(RepoURL)
 	if err != nil {
 		return "", err
@@ -93,31 +94,35 @@ func downloadRepo() (string, error) {
 		return "", fmt.Errorf("Bad status code: %d", resp.StatusCode)
 	}
 
+	// Read it into a buffer.
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
 
+	// Create a file to write the zip contents to.
 	f, err := ioutil.TempFile("", "wics.*.zip")
 	if err != nil {
 		return "", err
 	}
 	defer os.Remove(f.Name())
 
+	// Write the file.
 	if _, err = f.Write(b); err != nil {
 		return "", err
 	}
 
-	dir, err := ioutil.TempDir("", "wics")
-	if err != nil {
+	dest := filepath.Join(os.TempDir(), fmt.Sprintf("%s-master", RepoName))
+
+	// Delete any old copies of the repo.
+	os.RemoveAll(dest)
+
+	// Unzip the file.
+	if err = archiver.Unarchive(f.Name(), filepath.Dir(dest)); err != nil {
 		return "", err
 	}
 
-	if err = archiver.Unarchive(f.Name(), dir); err != nil {
-		return "", err
-	}
-
-	return filepath.Join(dir, fmt.Sprintf("%s-master", RepoName)), nil
+	return dest, nil
 }
 
 // buildSite builds the site with Jekyll.
