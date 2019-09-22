@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/google/go-github/v28/github"
 	"github.com/mholt/archiver"
 )
 
@@ -39,9 +40,39 @@ type (
 	Response events.APIGatewayProxyResponse
 )
 
+// AsHTTP returns a http.Request with its Body set to that of req.
+func (req Request) AsHTTP() *http.Request {
+	return &http.Request{Body: ioutil.NopCloser(strings.NewReader(req.Body))}
+}
+
 // Validate validates the request.
-func (req Request) Validate(resp *Response) bool {
-	return true // TODO
+func (req Request) Validate() error {
+	r := req.AsHTTP()
+
+	payload, err := github.ValidatePayload(r, WebhookSecret)
+	if err != nil {
+		return err
+	}
+
+	event, err := github.ParseWebHook(github.WebHookType(r), payload)
+	if err != nil {
+		return err
+	}
+
+	switch event.(type) {
+	case github.PushEvent:
+		pe := event.(github.PushEvent)
+		// The branch should be the default branch.
+		expected := fmt.Sprintf("refs/heads/%s", pe.GetRepo().GetDefaultBranch())
+		if pe.GetRef() != expected {
+			return fmt.Errorf("Ref %s is not the default branch", pe.GetRef())
+		}
+	default:
+		// The event should be a push event.
+		return fmt.Errorf("Unknown event type %T", event)
+	}
+
+	return nil
 }
 
 // downloadRepo downloads and unzip the repository, and returns its directory.
@@ -49,6 +80,8 @@ func downloadRepo() (string, error) {
 	resp, err := http.Get(RepoURL)
 	if err != nil {
 		return "", err
+	} else if resp.StatusCode != 200 {
+		return "", fmt.Errorf("Bad status code: %d", resp.StatusCode)
 	}
 
 	b, err := ioutil.ReadAll(resp.Body)
@@ -116,29 +149,31 @@ func doCmd(dir, program string, args ...string) error {
 
 func main() {
 	lambda.Start(func(req Request) (resp Response, nillErr error) {
-		if req.Validate(&resp) {
-			resp.StatusCode = 500
+		if err := req.Validate(); err != nil {
+			fmt.Println("validate request:", err)
+			resp.StatusCode = 400
+			return
+		}
+		resp.StatusCode = 500
 
-			dir, err := downloadRepo()
-			if err != nil {
-				resp.Body = fmt.Errorf("download repo: %w", err).Error()
-				return
-			}
-
-			dir, err = buildSite(dir)
-			if err != nil {
-				resp.Body = fmt.Errorf("build site: %w", err).Error()
-				return
-			}
-
-			if err = syncSite(dir); err != nil {
-				resp.Body = fmt.Errorf("sync site: %w", err).Error()
-				return
-			}
-
-			resp.StatusCode = 200
+		dir, err := downloadRepo()
+		if err != nil {
+			resp.Body = fmt.Errorf("download repo: %w", err).Error()
+			return
 		}
 
+		dir, err = buildSite(dir)
+		if err != nil {
+			resp.Body = fmt.Errorf("build site: %w", err).Error()
+			return
+		}
+
+		if err = syncSite(dir); err != nil {
+			resp.Body = fmt.Errorf("sync site: %w", err).Error()
+			return
+		}
+
+		resp.StatusCode = 200
 		return
 	})
 }
