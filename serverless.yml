@@ -1,0 +1,30 @@
+service: deploy
+provider:
+  name: aws
+  runtime: go1.x
+  layers:
+    - !Ref ToolsLambdaLayer
+  environment:
+    LANG: en_US.UTF-8  # Building the site fails without this.
+    WEBHOOK_SECRET: ${env:WEBHOOK_SECRET}
+package:
+  exclude:
+    - ./**
+  include:
+    - ./bin/*
+    - ./ssh/*
+layers:
+  tools:
+    name: ${self:service}-${self:provider.stage}-tools
+    path: ./layer
+    package:
+      exclude:
+        - ./**
+      include:
+        - ./bin/**
+        - ./lib/**
+functions:
+  deploy:
+    handler: ./bin/deploy
+    events:
+      - http: POST /deploy

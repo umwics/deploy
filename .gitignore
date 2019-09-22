@@ -1,0 +1,6 @@
+!/layer/build.sh
+*.env
+.serverless/
+/layer/*
+bin/
+ssh/
