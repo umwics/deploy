@@ -4,6 +4,7 @@ set -e
 
 GEMS=("github-pages")
 IMAGE="amazonlinux:2018.03"
+OPENSSH_VER="8.0p1"
 RSYNC_VER="3.1.3"
 RUBY_VER="2.6.3"  # If upgrading beyond 2.6.x, make sure to replace any occurences of 2.6.0.
 
@@ -11,19 +12,26 @@ if [ "$1" = build ]; then
   # This bit runs inside a Docker container.
   # Update packages and repositories.
   yum -y update
+  yum -y install bzip2 findutils gcc-c++ openssl-devel patch perl readline-devel zlib-devel
 
   # Build and install rsync.
-  yum -y install gcc perl
   curl "https://download.samba.org/pub/rsync/rsync-$RSYNC_VER".tar.gz | tar zxf -
   cd "rsync-$RSYNC_VER"
-  ./configure --prefix=/opt --mandir=/tmp
+  ./configure --prefix=/opt
+  make
+  make install
+  cd ..
+
+  # Build and install openssh.
+  curl "https://cloudflare.cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-$OPENSSH_VER.tar.gz" | tar zxf -
+  cd "openssh-$OPENSSH_VER"
+  ./configure --prefix=/opt
   make
   make install
   cd ..
 
   # Build and install Ruby.
-  yum -y install bzip2 findutils gcc-c++ openssl-devel patch readline-devel zlib-devel
-  curl -L https://github.com/rbenv/ruby-build/archive/v20190615.tar.gz | tar zxf -
+  curl -L "https://github.com/rbenv/ruby-build/archive/v20190615.tar.gz" | tar zxf -
   RUBY_CONFIGURE_OPTS="--enable-shared" ./ruby-build-20190615/bin/ruby-build --verbose "$RUBY_VER" /opt
 
   # Install required gems.
