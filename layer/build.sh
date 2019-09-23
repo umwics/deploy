@@ -10,9 +10,14 @@ RUBY_VER="2.6.3"  # If upgrading beyond 2.6.x, make sure to replace any occurenc
 
 if [ "$1" = build ]; then
   # This bit runs inside a Docker container.
-  # Update packages and repositories.
+  # Install required packages for building stuff.
   yum -y update
   yum -y install bzip2 findutils gcc-c++ openssl-devel patch perl readline-devel zlib-devel
+
+  # Clean up any artifacts from previous builds.
+  for f in /opt/*; do
+    [[ "$f" = "$0" ]] || rm -rf "$f"
+  done
 
   # Build and install rsync.
   curl "https://download.samba.org/pub/rsync/rsync-$RSYNC_VER".tar.gz | tar zxf -
@@ -55,8 +60,6 @@ else
     [[ "$confirm" != [Yy]* ]] && exit
   fi
 
-  # Clean any existing artifacts. This needs to be done with sudo because Docker creates files as root.
-  sudo rm -rf bin lib
   script=$(basename "$0")
 
   # Run this same script in Docker.
