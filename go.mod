@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/aws/aws-lambda-go v1.13.2
-	github.com/aws/aws-sdk-go v1.24.3
+	github.com/aws/aws-sdk-go v1.33.0
 	github.com/dsnet/compress v0.0.1 // indirect
 	github.com/frankban/quicktest v1.5.0 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
